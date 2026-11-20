@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'commons_photos.dart';
 import 'equipment_page.dart';
 import 'profile_page.dart';
 import 'workout_page.dart';
@@ -23,7 +24,7 @@ class GymReadyApp extends StatelessWidget {
       surface: const Color(0xfff7f7f4),
     );
     return MaterialApp(
-      title: 'Gym Ready',
+      title: '3000',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: colors,
@@ -101,7 +102,7 @@ class _LoginPageState extends State<_LoginPage> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Gym Ready',
+                      '3000',
                       style: theme.textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.w800,
                         letterSpacing: -1.6,
@@ -231,7 +232,18 @@ class _GymHomeState extends State<_GymHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Gym Ready')),
+      appBar: AppBar(
+        title: const Text('3000'),
+        actions: [
+          IconButton(
+            tooltip: 'Photo credits',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const PhotoCreditsPage()),
+            ),
+          ),
+        ],
+      ),
       body: IndexedStack(
         index: _selected,
         children: [

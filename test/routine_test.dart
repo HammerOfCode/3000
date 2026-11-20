@@ -3,29 +3,52 @@ import 'package:gym_ready/equipment_page.dart';
 import 'package:gym_ready/routine.dart';
 
 void main() {
-  test('every area, level and time limit has a bodyweight routine', () {
-    for (final area in BodyArea.values) {
+  test('each selected area is covered at every level and time limit', () {
+    const selections = [
+      {BodyArea.chest, BodyArea.back},
+      {BodyArea.legs, BodyArea.arms, BodyArea.core},
+      {BodyArea.chest, BodyArea.back, BodyArea.shoulders, BodyArea.arms},
+      fullBodyAreas,
+    ];
+    for (final areas in selections) {
       for (final level in Experience.values) {
         for (final minutes in [15, 25, 40]) {
           final routine = buildRoutine(
-            area: area,
+            areas: areas,
             available: {},
             minutes: minutes,
             experience: level,
           );
-          expect(routine, isNotEmpty);
+          expect(routine.map((item) => item.movement.area).toSet(), areas);
           for (final item in routine) {
             expect(item.exercise.equipment, isEmpty);
-            if (area != BodyArea.fullBody) expect(item.movement.area, area);
           }
         }
       }
     }
   });
 
+  test('generator rejects selections outside the two to four area limit', () {
+    for (final areas in [
+      <BodyArea>{},
+      {BodyArea.chest},
+      {...fullBodyAreas, BodyArea.arms},
+    ]) {
+      expect(
+        () => buildRoutine(
+          areas: areas,
+          available: {},
+          minutes: 25,
+          experience: Experience.beginner,
+        ),
+        throwsArgumentError,
+      );
+    }
+  });
+
   test('equipment requiring two items checks both before recommending it', () {
     List<RoutineItem> chest(Set<Equipment> available) => buildRoutine(
-      area: BodyArea.chest,
+      areas: {BodyArea.chest, BodyArea.core},
       available: available,
       minutes: 15,
       experience: Experience.beginner,
@@ -46,7 +69,7 @@ void main() {
 
   test('longer full-body routines include more exercises', () {
     List<RoutineItem> fullBody(int minutes) => buildRoutine(
-      area: BodyArea.fullBody,
+      areas: fullBodyAreas,
       available: {},
       minutes: minutes,
       experience: Experience.beginner,
@@ -59,7 +82,7 @@ void main() {
     for (final experience in Experience.values) {
       final volumes = [
         for (final minutes in [15, 25, 40])
-          setsPerExercise(minutes, experience, area: BodyArea.chest),
+          setsPerExercise(minutes, experience, areaCount: 2),
       ];
       expect(volumes, [2, 3, 4]);
     }
@@ -76,5 +99,23 @@ void main() {
         reason: movement.options.first.name,
       );
     }
+  });
+
+  test('new catalog machines affect matching workout recommendations', () {
+    const machines = {Equipment.hackSquat, Equipment.abCrunch};
+    final routine = buildRoutine(
+      areas: {BodyArea.legs, BodyArea.core},
+      available: machines,
+      minutes: 15,
+      experience: Experience.beginner,
+    );
+    expect(
+      routine.map((item) => item.exercise.name),
+      containsAll(['Hack squat', 'Machine ab crunch']),
+    );
+    expect(
+      routine.every((item) => item.exercise.isAvailable(machines)),
+      isTrue,
+    );
   });
 }

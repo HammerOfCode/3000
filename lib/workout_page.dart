@@ -1,44 +1,147 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'commons_photos.dart';
 import 'equipment_page.dart';
+import 'gemma_routine_ai.dart';
+import 'repdb_assets.dart';
+import 'repdb_image.dart';
 import 'routine.dart';
+import 'routine_ai.dart';
 
 class WorkoutPage extends StatefulWidget {
-  const WorkoutPage({super.key, required this.available});
+  const WorkoutPage({
+    super.key,
+    required this.available,
+    this.ai = const GemmaRoutineAi(),
+  });
 
   final Set<Equipment> available;
+  final RoutineAi ai;
 
   @override
   State<WorkoutPage> createState() => _WorkoutPageState();
 }
 
 class _WorkoutPageState extends State<WorkoutPage> {
-  BodyArea _area = BodyArea.fullBody;
+  final Set<BodyArea> _areas = {};
   Experience _experience = Experience.beginner;
   int _minutes = 25;
   List<RoutineItem> _routine = [];
+  bool _useAi = false;
+  bool? _modelReady;
+  double? _downloadProgress;
+  String? _downloadError;
+  bool _buildingAi = false;
+  int _routineVersion = 0;
+  String? _routineStatus;
   final _result = GlobalKey();
 
   @override
   void didUpdateWidget(covariant WorkoutPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!setEquals(oldWidget.available, widget.available)) _routine = [];
+    if (!setEquals(oldWidget.available, widget.available)) _clearRoutine();
   }
 
   void _update(VoidCallback change) => setState(() {
     change();
-    _routine = [];
+    _clearRoutine();
   });
 
-  void _buildRoutine() {
+  void _clearRoutine() {
+    _routine = [];
+    _routineStatus = null;
+    _routineVersion++;
+  }
+
+  Future<void> _toggleAi(bool enabled) async {
+    _update(() {
+      _useAi = enabled;
+      _downloadError = null;
+      if (enabled && _downloadProgress == null) _modelReady = null;
+    });
+    if (!enabled || _downloadProgress != null) return;
+    var ready = false;
+    try {
+      ready = await widget.ai.hasModel();
+    } catch (_) {
+      // A model check can fail if the device's app storage is unavailable.
+    }
+    if (mounted) setState(() => _modelReady = ready);
+  }
+
+  Future<void> _downloadModel() async {
     setState(() {
-      _routine = buildRoutine(
-        area: _area,
+      _downloadProgress = 0;
+      _downloadError = null;
+    });
+    try {
+      await widget.ai.downloadModel((progress) {
+        if (mounted) setState(() => _downloadProgress = progress);
+      });
+      if (mounted) setState(() => _modelReady = true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _downloadError =
+              'Download failed. Try again or use the regular builder.';
+          _modelReady = false;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _downloadProgress = null);
+    }
+  }
+
+  Future<void> _buildRoutine() async {
+    final baseline = buildRoutine(
+      areas: _areas,
+      available: widget.available,
+      minutes: _minutes,
+      experience: _experience,
+    );
+    if (!_useAi || _modelReady != true) {
+      _showRoutine(
+        baseline,
+        status: _useAi
+            ? 'Gemma is unavailable. Used the regular builder.'
+            : null,
+      );
+      return;
+    }
+
+    setState(() {
+      _clearRoutine();
+      _buildingAi = true;
+    });
+    final version = _routineVersion;
+    List<RoutineItem>? result;
+    try {
+      result = await chooseAiRoutine(
+        baseline: baseline,
         available: widget.available,
         minutes: _minutes,
         experience: _experience,
-      );
+        generate: widget.ai.generate,
+      ).timeout(const Duration(seconds: 75));
+    } catch (error) {
+      if (kDebugMode) debugPrint('Gemma routine failed: $error');
+    }
+    if (!mounted) return;
+    setState(() => _buildingAi = false);
+    if (version != _routineVersion) return;
+    _showRoutine(
+      result ?? baseline,
+      status: result == null
+          ? 'Gemma could not finish. Used the regular builder.'
+          : 'Exercise choices by Gemma',
+    );
+  }
+
+  void _showRoutine(List<RoutineItem> routine, {String? status}) {
+    setState(() {
+      _routine = routine;
+      _routineStatus = status;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final resultContext = _result.currentContext;
@@ -86,14 +189,20 @@ class _WorkoutPageState extends State<WorkoutPage> {
         ),
       ),
     );
-    if (!mounted || replacement == null) return;
+    if (!mounted ||
+        replacement == null ||
+        index >= _routine.length ||
+        _routine[index] != item) {
+      return;
+    }
     setState(() => _routine[index] = RoutineItem(item.movement, replacement));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sets = setsPerExercise(_minutes, _experience, area: _area);
+    final areaCount = _areas.length;
+    final sets = setsPerExercise(_minutes, _experience, areaCount: areaCount);
     final equipmentCount = widget.available.length;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -121,18 +230,37 @@ class _WorkoutPageState extends State<WorkoutPage> {
           ],
         ),
         const SizedBox(height: 24),
-        Text('Target area', style: theme.textTheme.titleMedium),
+        Text('Target areas', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Choose $minTargetAreas–$maxTargetAreas areas. $areaCount selected.',
+          style: theme.textTheme.bodySmall,
+        ),
         const SizedBox(height: 4),
         Wrap(
           spacing: 8,
           children: [
+            ActionChip(
+              label: const Text('Full body'),
+              onPressed: () => _update(() {
+                _areas
+                  ..clear()
+                  ..addAll(fullBodyAreas);
+              }),
+            ),
             for (final area in BodyArea.values)
-              ChoiceChip(
+              FilterChip(
                 label: Text(area.label),
-                selected: _area == area,
-                onSelected: (selected) {
-                  if (selected) _update(() => _area = area);
-                },
+                selected: _areas.contains(area),
+                onSelected: _areas.contains(area) || areaCount < maxTargetAreas
+                    ? (selected) => _update(() {
+                        if (selected) {
+                          _areas.add(area);
+                        } else {
+                          _areas.remove(area);
+                        }
+                      })
+                    : null,
               ),
           ],
         ),
@@ -168,10 +296,40 @@ class _WorkoutPageState extends State<WorkoutPage> {
               ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Use AI'),
+          subtitle: Text(
+            widget.ai.supported
+                ? 'Choose exercises with on-device Gemma.'
+                : 'Gemma requires a compatible 64-bit device.',
+          ),
+          value: _useAi,
+          onChanged: widget.ai.supported ? _toggleAi : null,
+        ),
+        if (_useAi) ...[
+          if (_downloadProgress case final progress?) ...[
+            LinearProgressIndicator(value: progress),
+            Text('Downloading Gemma · ${(progress * 100).round()}%'),
+          ] else if (_modelReady == null)
+            const Text('Checking for a downloaded model…')
+          else if (_modelReady == false)
+            OutlinedButton.icon(
+              onPressed: _downloadModel,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Download Gemma · 2.4 GiB'),
+            ),
+          if (_downloadError case final error?) Text(error),
+        ],
+        const SizedBox(height: 12),
         FilledButton(
-          onPressed: _buildRoutine,
-          child: const Text('Build routine'),
+          onPressed: areaCount >= minTargetAreas && (!_useAi || !_buildingAi)
+              ? _buildRoutine
+              : null,
+          child: Text(
+            _useAi && _buildingAi ? 'Building with Gemma…' : 'Build routine',
+          ),
         ),
         if (_routine.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -183,6 +341,7 @@ class _WorkoutPageState extends State<WorkoutPage> {
             style: theme.textTheme.headlineSmall,
           ),
           const SizedBox(height: 4),
+          if (_routineStatus case final status?) Text(status),
           Text(
             '${_routine.length} exercises · $sets sets each · ${_experience.restSeconds}s rest between sets',
           ),
@@ -196,22 +355,85 @@ class _WorkoutPageState extends State<WorkoutPage> {
 
   Widget _exerciseTile(int index, RoutineItem item) {
     final exercise = item.exercise;
+    final photo = exercise.photo;
     final alternatives = _alternatives(item);
     final reps = '${_experience.minReps}–${_experience.maxReps} reps';
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(exercise.name),
-      subtitle: Text(
-        '${exercise.equipmentLabel}\n$reps${exercise.perSide ? ' per side' : ''}',
+    return RepDbImageChoice(
+      asset: repDbAsset('flat', repDbExerciseImages[exercise.name]),
+      builder: (context, illustration) => ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: illustration == null && photo == null
+            ? null
+            : _exercisePhoto(exercise.name, photo, illustration),
+        title: Text(exercise.name),
+        subtitle: Text(
+          '${item.movement.area.label} · ${exercise.equipmentLabel}\n'
+          '$reps${exercise.perSide ? ' per side' : ''}',
+        ),
+        isThreeLine: true,
+        trailing: alternatives.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Swap ${exercise.name}',
+                icon: const Icon(Icons.swap_horiz),
+                onPressed: () => _swap(index, alternatives),
+              ),
       ),
-      isThreeLine: true,
-      trailing: alternatives.isEmpty
-          ? null
-          : IconButton(
-              tooltip: 'Swap ${exercise.name}',
-              icon: const Icon(Icons.swap_horiz),
-              onPressed: () => _swap(index, alternatives),
+    );
+  }
+
+  Widget _exercisePhoto(
+    String name,
+    CommonsPhoto? photo,
+    String? illustration,
+  ) {
+    final radius = BorderRadius.circular(8);
+    return Tooltip(
+      message: 'View $name photo',
+      child: InkWell(
+        borderRadius: radius,
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(name),
+            scrollable: true,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Image.asset(
+                  illustration ?? photo!.assetPath,
+                  width: 340,
+                  cacheWidth: illustration == null ? 960 : 512,
+                ),
+                const SizedBox(height: 12),
+                if (illustration != null)
+                  const RepDbCredit()
+                else
+                  SelectableText(photo!.credit),
+              ],
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        ),
+        child: illustration == null
+            ? CommonsThumbnail(photo!, size: 56)
+            : ClipRRect(
+                borderRadius: radius,
+                child: Image.asset(
+                  illustration,
+                  width: 56,
+                  height: 56,
+                  cacheWidth: 168,
+                  fit: BoxFit.contain,
+                ),
+              ),
+      ),
     );
   }
 }

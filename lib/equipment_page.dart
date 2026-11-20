@@ -2,21 +2,97 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-enum Equipment {
-  dumbbells('Dumbbells'),
-  bench('Flat bench'),
-  band('Resistance band'),
-  cable('Cable station'),
-  pulldown('Lat pulldown machine'),
-  chestPress('Chest press machine'),
-  row('Seated row machine'),
-  legPress('Leg press machine'),
-  legCurl('Leg curl machine'),
-  shoulderPress('Shoulder press machine'),
-  pullUpBar('Pull-up bar');
+import 'commons_photos.dart';
+import 'machine_detail_page.dart';
+import 'machine_media.dart';
+import 'repdb_assets.dart';
+import 'repdb_image.dart';
 
-  const Equipment(this.label);
+enum EquipmentGroup {
+  freeWeights('Free weights & accessories'),
+  machines('Machines & stations');
+
+  const EquipmentGroup(this.label);
   final String label;
+}
+
+enum Equipment {
+  dumbbells(
+    'Dumbbells',
+    group: EquipmentGroup.freeWeights,
+    photo: CommonsPhoto.dumbbells,
+  ),
+  bench(
+    'Flat bench',
+    group: EquipmentGroup.freeWeights,
+    photo: CommonsPhoto.bench,
+  ),
+  band(
+    'Resistance band',
+    group: EquipmentGroup.freeWeights,
+    photo: CommonsPhoto.band,
+  ),
+  cable(
+    'Cable station',
+    aliases: ['cable crossover', 'functional trainer'],
+    photo: CommonsPhoto.cableStation,
+  ),
+  pulldown('Lat pulldown machine', photo: CommonsPhoto.latPulldown),
+  chestPress('Chest press machine', photo: CommonsPhoto.chestPress),
+  row('Seated row machine'),
+  legPress(
+    'Leg press machine',
+    photo: CommonsPhoto.legPressMachine,
+    // TODO: Replace the demo with a licensed model of an actual leg press.
+    media: MachineMedia(
+      model3dUrl: 'assets/models/leg_press_demo.glb',
+      hotspots: [
+        MachineHotspot(
+          label: 'Foot plate',
+          position: '0m 0.98m 0.52m',
+          normal: '0m 0m 1m',
+          description: 'The foot plate moves with the sled.',
+        ),
+      ],
+    ),
+  ),
+  legCurl('Leg curl machine', photo: CommonsPhoto.lyingLegCurl),
+  shoulderPress('Shoulder press machine', photo: CommonsPhoto.shoulderPress),
+  pullUpBar('Pull-up bar', photo: CommonsPhoto.pullUpBar),
+  hackSquat('Hack squat machine', photo: CommonsPhoto.hackSquat),
+  legExtension('Leg extension machine', photo: CommonsPhoto.legExtension),
+  seatedLegCurl('Seated leg curl machine'),
+  pecDeck(
+    'Pec deck machine',
+    aliases: ['chest fly', 'butterfly'],
+    photo: CommonsPhoto.pecDeck,
+  ),
+  assistedPullUp('Assisted pull-up machine', aliases: ['assisted chin-up']),
+  abCrunch('Ab crunch machine', aliases: ['abdominal crunch']),
+  rearDeltFly('Rear delt fly machine', aliases: ['reverse fly']),
+  bicepsCurl('Biceps curl machine', aliases: ['preacher curl']),
+  tricepsExtension('Triceps extension machine'),
+  smithMachine('Smith machine');
+
+  const Equipment(
+    this.label, {
+    this.group = EquipmentGroup.machines,
+    this.aliases = const [],
+    this.photo,
+    this.media = const MachineMedia(),
+  });
+  final String label;
+  final EquipmentGroup group;
+  final List<String> aliases;
+  final CommonsPhoto? photo;
+  final MachineMedia media;
+
+  String? get posterUrl =>
+      media.posterUrl ?? repDbAsset('equipment', repDbEquipmentImages[name]);
+
+  bool matches(String query) =>
+      label.toLowerCase().contains(query) ||
+      aliases.any((alias) => alias.contains(query));
 }
 
 class NamedEquipment {
@@ -36,7 +112,7 @@ class NamedEquipment {
   String toStorage() => jsonEncode([name, match?.name]);
 }
 
-class EquipmentPage extends StatelessWidget {
+class EquipmentPage extends StatefulWidget {
   const EquipmentPage({
     super.key,
     required this.available,
@@ -51,30 +127,71 @@ class EquipmentPage extends StatelessWidget {
   final void Function(Equipment, bool)? onChanged;
 
   @override
+  State<EquipmentPage> createState() => _EquipmentPageState();
+}
+
+class _EquipmentPageState extends State<EquipmentPage> {
+  String _query = '';
+  bool _myGym = false;
+
+  @override
   Widget build(BuildContext context) {
-    final machines = Equipment.values.skip(3);
+    final catalog = Equipment.values.where(
+      (item) =>
+          (!_myGym || widget.available.contains(item)) && item.matches(_query),
+    );
+    final named = widget.named.where(
+      (item) =>
+          item.name.toLowerCase().contains(_query) ||
+          (item.match?.matches(_query) ?? false),
+    );
+    final styles = Theme.of(context).textTheme;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        Text(
-          'Your gym equipment',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
+        Text('Equipment catalog', style: styles.headlineSmall),
         const SizedBox(height: 8),
-        const Text(
-          'Check what you can use at your gym. Changes save automatically.',
-        ),
+        const Text('Check what your gym has to use it in your workouts.'),
         const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: onNamedChanged == null
-                ? null
-                : () => _addEquipment(context),
-            icon: const Icon(Icons.add),
-            label: const Text('Add equipment'),
+        TextField(
+          onChanged: (text) =>
+              setState(() => _query = text.trim().toLowerCase()),
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search),
+            labelText: 'Search machines or gear',
           ),
         ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilterChip(
+              label: const Text('My gym'),
+              selected: _myGym,
+              onSelected: (selected) => setState(() => _myGym = selected),
+            ),
+            OutlinedButton.icon(
+              onPressed: widget.onNamedChanged == null ? null : _addEquipment,
+              icon: const Icon(Icons.add),
+              label: const Text('Add equipment'),
+            ),
+          ],
+        ),
+        if (catalog.isEmpty && named.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              _query.isEmpty
+                  ? 'No saved equipment yet.'
+                  : 'No equipment matches your search.',
+            ),
+          ),
+        if (named.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text('Custom equipment', style: styles.titleMedium),
+        ],
         for (final item in named)
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -83,47 +200,76 @@ class EquipmentPage extends StatelessWidget {
             trailing: IconButton(
               tooltip: 'Remove ${item.name}',
               icon: const Icon(Icons.remove_circle_outline),
-              onPressed: onNamedChanged == null
+              onPressed: widget.onNamedChanged == null
                   ? null
-                  : () => onNamedChanged!(
-                      named.where((entry) => entry != item).toList(),
+                  : () => widget.onNamedChanged!(
+                      widget.named.where((entry) => entry != item).toList(),
                     ),
             ),
           ),
-        const SizedBox(height: 24),
-        Text(
-          'Free weights & accessories',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        for (final item in Equipment.values.take(3)) _checkbox(item),
-        const Divider(height: 24),
-        Text(
-          'Machines & stations',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        for (final item in machines) _checkbox(item),
+        for (final group in EquipmentGroup.values)
+          if (catalog.any((item) => item.group == group)) ...[
+            const SizedBox(height: 16),
+            Text(group.label, style: styles.titleMedium),
+            for (final item in catalog.where((item) => item.group == group))
+              _checkbox(item),
+          ],
       ],
     );
   }
 
-  Future<void> _addEquipment(BuildContext context) async {
+  Future<void> _addEquipment() async {
     final added = await showDialog<NamedEquipment>(
       context: context,
-      builder: (_) => _AddEquipmentDialog(named: named),
+      builder: (_) => _AddEquipmentDialog(named: widget.named),
     );
-    if (context.mounted && added != null) {
-      onNamedChanged?.call([...named, added]);
+    if (mounted && added != null) {
+      widget.onNamedChanged?.call([...widget.named, added]);
     }
   }
 
   Widget _checkbox(Equipment item) {
-    final change = onChanged;
-    return CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      controlAffinity: ListTileControlAffinity.leading,
-      title: Text(item.label),
-      value: available.contains(item),
-      onChanged: change == null ? null : (checked) => change(item, checked!),
+    final change = widget.onChanged;
+    final photo = item.photo;
+    final poster = item.posterUrl;
+    return Row(
+      children: [
+        Expanded(
+          child: RepDbImageChoice(
+            asset: poster,
+            builder: (context, bundledPoster) => CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(item.label),
+              secondary: bundledPoster != null
+                  ? Image.asset(
+                      bundledPoster,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.contain,
+                      cacheWidth: 160,
+                      excludeFromSemantics: true,
+                    )
+                  : photo == null
+                  ? null
+                  : CommonsThumbnail(photo, size: 48),
+              value: widget.available.contains(item),
+              onChanged: change == null
+                  ? null
+                  : (checked) => change(item, checked!),
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right),
+          tooltip: 'View ${item.label} details',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => MachineDetailPage(equipment: item),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,7 +1,7 @@
+import 'commons_photos.dart';
 import 'equipment_page.dart';
 
 enum BodyArea {
-  fullBody('Full body'),
   chest('Chest'),
   back('Back'),
   legs('Legs'),
@@ -12,6 +12,15 @@ enum BodyArea {
   const BodyArea(this.label);
   final String label;
 }
+
+const minTargetAreas = 2;
+const maxTargetAreas = 4;
+const fullBodyAreas = {
+  BodyArea.legs,
+  BodyArea.chest,
+  BodyArea.back,
+  BodyArea.core,
+};
 
 enum Experience {
   beginner('Beginner', 8, 12, 60),
@@ -25,11 +34,17 @@ enum Experience {
 }
 
 class Exercise {
-  const Exercise(this.name, {this.equipment = const {}, this.perSide = false});
+  const Exercise(
+    this.name, {
+    this.equipment = const {},
+    this.perSide = false,
+    this.photo,
+  });
 
   final String name;
   final Set<Equipment> equipment;
   final bool perSide;
+  final CommonsPhoto? photo;
 
   bool isAvailable(Set<Equipment> available) =>
       available.containsAll(equipment);
@@ -47,14 +62,32 @@ class Movement {
 
 const movements = [
   Movement(BodyArea.legs, [
-    Exercise('Leg press', equipment: {Equipment.legPress}),
+    Exercise(
+      'Leg press',
+      equipment: {Equipment.legPress},
+      photo: CommonsPhoto.legPress,
+    ),
+    Exercise(
+      'Hack squat',
+      equipment: {Equipment.hackSquat},
+      photo: CommonsPhoto.hackSquat,
+    ),
+    Exercise(
+      'Leg extension',
+      equipment: {Equipment.legExtension},
+      photo: CommonsPhoto.legExtension,
+    ),
     Exercise('Dumbbell goblet squat', equipment: {Equipment.dumbbells}),
-    Exercise('Bodyweight squat'),
+    Exercise('Bodyweight squat', photo: CommonsPhoto.bodyweightSquat),
     Exercise('Wall-supported squat'),
     Exercise('Sit-to-stand squat', equipment: {Equipment.bench}),
   ]),
   Movement(BodyArea.chest, [
-    Exercise('Machine chest press', equipment: {Equipment.chestPress}),
+    Exercise(
+      'Machine chest press',
+      equipment: {Equipment.chestPress},
+      photo: CommonsPhoto.chestPress,
+    ),
     Exercise(
       'Dumbbell bench press',
       equipment: {Equipment.dumbbells, Equipment.bench},
@@ -65,18 +98,27 @@ const movements = [
   ]),
   Movement(BodyArea.back, [
     Exercise('Seated machine row', equipment: {Equipment.row}),
-    Exercise('Seated cable row', equipment: {Equipment.cable}),
+    Exercise(
+      'Seated cable row',
+      equipment: {Equipment.cable},
+      photo: CommonsPhoto.cableRow,
+    ),
     Exercise('Dumbbell bent-over row', equipment: {Equipment.dumbbells}),
     Exercise('Prone W raise'),
     Exercise('Reverse snow angel'),
   ]),
   Movement(BodyArea.core, [
+    Exercise('Machine ab crunch', equipment: {Equipment.abCrunch}),
     Exercise('Dead bug', perSide: true),
     Exercise('Heel tap', perSide: true),
     Exercise('Supine march', perSide: true),
   ]),
   Movement(BodyArea.shoulders, [
-    Exercise('Machine shoulder press', equipment: {Equipment.shoulderPress}),
+    Exercise(
+      'Machine shoulder press',
+      equipment: {Equipment.shoulderPress},
+      photo: CommonsPhoto.shoulderPress,
+    ),
     Exercise(
       'Standing dumbbell shoulder press',
       equipment: {Equipment.dumbbells},
@@ -85,6 +127,7 @@ const movements = [
     Exercise('Prone Y raise'),
   ]),
   Movement(BodyArea.arms, [
+    Exercise('Machine biceps curl', equipment: {Equipment.bicepsCurl}),
     Exercise('Dumbbell biceps curl', equipment: {Equipment.dumbbells}),
     Exercise('Band biceps curl', equipment: {Equipment.band}),
     Exercise('Self-resisted biceps curl', perSide: true),
@@ -92,18 +135,29 @@ const movements = [
   ]),
   Movement(BodyArea.legs, [
     Exercise('Dumbbell Romanian deadlift', equipment: {Equipment.dumbbells}),
-    Exercise('Lying leg curl', equipment: {Equipment.legCurl}),
+    Exercise(
+      'Lying leg curl',
+      equipment: {Equipment.legCurl},
+      photo: CommonsPhoto.lyingLegCurl,
+    ),
+    Exercise('Seated leg curl', equipment: {Equipment.seatedLegCurl}),
     Exercise('Floor glute bridge'),
     Exercise('Bodyweight good morning'),
   ]),
   Movement(BodyArea.chest, [
+    Exercise('Pec deck fly', equipment: {Equipment.pecDeck}),
     Exercise('Chest press with band around back', equipment: {Equipment.band}),
     Exercise('Incline push-up', equipment: {Equipment.bench}),
     Exercise('Standing palm press'),
     Exercise('Wide wall push-up'),
   ]),
   Movement(BodyArea.back, [
-    Exercise('Lat pulldown', equipment: {Equipment.pulldown}),
+    Exercise(
+      'Lat pulldown',
+      equipment: {Equipment.pulldown},
+      photo: CommonsPhoto.latPulldown,
+    ),
+    Exercise('Assisted pull-up', equipment: {Equipment.assistedPullUp}),
     Exercise('Cable straight-arm pulldown', equipment: {Equipment.cable}),
     Exercise('Scapular pull-up', equipment: {Equipment.pullUpBar}),
     Exercise('Prone floor pulldown'),
@@ -114,12 +168,17 @@ const movements = [
     Exercise('Bent-knee side plank hip lift', perSide: true),
   ]),
   Movement(BodyArea.shoulders, [
+    Exercise('Machine rear delt fly', equipment: {Equipment.rearDeltFly}),
     Exercise('Dumbbell lateral raise', equipment: {Equipment.dumbbells}),
     Exercise('Band lateral raise', equipment: {Equipment.band}),
     Exercise('Prone T raise'),
     Exercise('Side-lying arm raise', perSide: true),
   ]),
   Movement(BodyArea.arms, [
+    Exercise(
+      'Machine triceps extension',
+      equipment: {Equipment.tricepsExtension},
+    ),
     Exercise('Cable triceps pushdown', equipment: {Equipment.cable}),
     Exercise(
       'Dumbbell overhead triceps extension',
@@ -147,16 +206,19 @@ class RoutineItem {
 }
 
 List<RoutineItem> buildRoutine({
-  required BodyArea area,
+  required Set<BodyArea> areas,
   required Set<Equipment> available,
   required int minutes,
   required Experience experience,
 }) {
-  final sets = setsPerExercise(minutes, experience, area: area);
+  if (areas.length < minTargetAreas || areas.length > maxTargetAreas) {
+    throw ArgumentError.value(areas, 'areas', 'Select 2 to 4 target areas.');
+  }
+  final sets = setsPerExercise(minutes, experience, areaCount: areas.length);
   final secondsPerExercise = sets * (45 + experience.restSeconds);
   final count = (minutes * 60) ~/ secondsPerExercise;
   return movements
-      .where((movement) => area == BodyArea.fullBody || movement.area == area)
+      .where((movement) => areas.contains(movement.area))
       .take(count)
       .map(
         (movement) => RoutineItem(
@@ -172,9 +234,9 @@ List<RoutineItem> buildRoutine({
 int setsPerExercise(
   int minutes,
   Experience experience, {
-  required BodyArea area,
+  required int areaCount,
 }) {
   if (minutes <= 15) return 2;
-  if (area != BodyArea.fullBody) return minutes >= 40 ? 4 : 3;
+  if (areaCount == minTargetAreas) return minutes >= 40 ? 4 : 3;
   return experience == Experience.intermediate ? 3 : 2;
 }

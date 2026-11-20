@@ -1,0 +1,61 @@
+const repDbRevision = 'f0347a22f309cfef33139a273f2391b69e0254a5';
+const repDbCredit = 'Exercise data by RepDB (repdb.co)';
+
+const repDbEquipmentImages = {
+  'dumbbells': 'dumbbell',
+  'bench': 'flat-bench',
+  'band': 'resistance-band',
+  'cable': 'cable',
+  'pulldown': 'lat-pulldown-machine',
+  'chestPress': 'chest-press-machine',
+  'row': 'seated-row-machine',
+  'legPress': 'leg-press',
+  'legCurl': 'leg-curl',
+  'shoulderPress': 'shoulder-press-machine',
+  'pullUpBar': 'pull-up-bar',
+  'hackSquat': 'hack-squat',
+  'legExtension': 'leg-extension',
+  'pecDeck': 'pec-deck',
+  'assistedPullUp': 'assisted-pullup-machine',
+  'abCrunch': 'ab-crunch-machine',
+  'rearDeltFly': 'reverse-fly-machine',
+  'bicepsCurl': 'bicep-curl-machine',
+  'tricepsExtension': 'tricep-extension-machine',
+  'smithMachine': 'smith-machine',
+};
+
+const repDbExerciseImages = {
+  'Leg press': 'leg-press-peak',
+  'Hack squat': 'hack-squat-peak',
+  'Leg extension': 'leg-extension-peak',
+  'Dumbbell goblet squat': 'db-goblet-squat-peak',
+  'Bodyweight squat': 'bodyweight-squat-peak',
+  'Machine chest press': 'chest-press-machine-peak',
+  'Dumbbell bench press': 'db-bench-press-peak',
+  'Dumbbell floor press': 'dumbbell-floor-press-peak',
+  'Knee push-up': 'knee-push-ups-peak',
+  'Wall push-up': 'wall-push-ups-peak',
+  'Seated cable row': 'seated-cable-row-peak',
+  'Dumbbell bent-over row': 'bent-over-db-row-peak',
+  'Machine ab crunch': 'machine-seated-crunch-peak',
+  'Dead bug': 'dead-bug-peak',
+  'Machine shoulder press': 'machine-shoulder-press-peak',
+  'Machine biceps curl': 'machine-bicep-curl-peak',
+  'Dumbbell biceps curl': 'bicep-curl-peak',
+  'Dumbbell Romanian deadlift': 'dumbbell-romanian-deadlift-peak',
+  'Lying leg curl': 'leg-curl-peak',
+  'Seated leg curl': 'seated-leg-curl-peak',
+  'Floor glute bridge': 'glute-bridge-peak',
+  'Pec deck fly': 'pec-deck-peak',
+  'Incline push-up': 'incline-push-ups-peak',
+  'Lat pulldown': 'lat-pulldown-peak',
+  'Assisted pull-up': 'assisted-pull-ups-peak',
+  'Cable straight-arm pulldown': 'straight-arm-pulldown-peak',
+  'Machine rear delt fly': 'machine-reverse-fly-peak',
+  'Dumbbell lateral raise': 'lateral-raise-peak',
+  'Machine triceps extension': 'machine-triceps-extension-peak',
+  'Bodyweight reverse lunge': 'bodyweight-reverse-lunge-peak',
+};
+
+String? repDbAsset(String folder, String? name) =>
+    name == null ? null : 'assets/repdb/$folder/$name.webp';
